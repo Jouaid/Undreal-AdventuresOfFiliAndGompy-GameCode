@@ -49,6 +49,15 @@ class AProjectArcadeCharacter : public ACharacter
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Boss", meta = (AllowPrivateAccess = "true"))
     class USphereComponent* bossSmashHitBox;
 
+  UPROPERTY(EditAnywhere, Category = "Particle", meta = (AllowPrivateAccess = "true"))
+    class UParticleSystem* smashParticle;
+
+  UPROPERTY(EditAnywhere, Category = "Particle", meta = (AllowPrivateAccess = "true"))
+    class UParticleSystem* twistParticle;
+
+  UPROPERTY(EditAnywhere, Category = "Particle", meta = (AllowPrivateAccess = "true"))
+    class UParticleSystem* dashParticle;
+  
 public:
   AProjectArcadeCharacter();
 
@@ -61,6 +70,9 @@ protected:
 public:
   UPROPERTY(BlueprintReadOnly)
   int32 playerID = 0;
+
+  UPROPERTY(BlueprintReadOnly)
+    bool isPlayerOne;
 
   virtual void BeginPlay();
 
@@ -79,6 +91,17 @@ public:
   FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
 public:
+  UPROPERTY(EditAnywhere, Category = "Camera Offset")
+    FTransform offsetCamera;
+
+  FTransform cameraOriginalPos;
+
+  UFUNCTION(BlueprintImplementableEvent, Category = "Particle")
+    void OnTwistAttackParticle(AActor* findMeInBlueprint); 
+  UFUNCTION(BlueprintImplementableEvent, Category = "Particle")
+    void OnSmashAttackParticle(AActor* findMeInBlueprint);
+  UFUNCTION(BlueprintImplementableEvent, Category = "Particle")
+    void OnDashParticle(AActor* findMeInBlueprint);
 
   UPROPERTY(EditAnywhere, Category = "Spawner")
     class ASpawner* spawner;
@@ -104,6 +127,9 @@ public:
 
   /**Kills actor**/
   void Kill();
+
+  UFUNCTION(BlueprintImplementableEvent)
+  void Death(AActor* actor);
 
   bool dead;
 
@@ -244,6 +270,29 @@ public:
     float BossSmashAttackDamage;
   UPROPERTY(EditAnywhere, Category = "Boss Damage")
     float BossTwistAttackDamage;
+
+  //Audio
+  UFUNCTION(BlueprintImplementableEvent)
+    void GettingHitAudio(AActor* findMeInBlueprint);
+  UFUNCTION(BlueprintImplementableEvent)
+    void BasicAttackAudio(AActor* findMeInBlueprint);
+  UFUNCTION(BlueprintImplementableEvent)
+    void ShieldAttackAudio(AActor* findMeInBlueprint);
+  UFUNCTION(BlueprintImplementableEvent)
+    void DashAttackAudio(AActor* findMeInBlueprint);
+  UFUNCTION(BlueprintImplementableEvent)
+    void TwistAttackAudio(AActor* findMeInBlueprint);
+  UFUNCTION(BlueprintImplementableEvent)
+    void SmashAttackAudio(AActor* findMeInBlueprint);
+  UFUNCTION(BlueprintImplementableEvent)
+    void BossTwistAttackAudio(AActor* findMeInBlueprint);
+  UFUNCTION(BlueprintImplementableEvent)
+    void BossSmashAttackAudio(AActor* findMeInBlueprint);
+
+  UFUNCTION(BlueprintImplementableEvent)
+    void ActivateSnow(AActor* findMeInBlueprint);
+  UFUNCTION(BlueprintImplementableEvent)
+    void DeActivateSnow(AActor* findMeInBlueprint);
 
   UFUNCTION()
     void OnOverlapBegin(class UPrimitiveComponent* OverlappedComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);

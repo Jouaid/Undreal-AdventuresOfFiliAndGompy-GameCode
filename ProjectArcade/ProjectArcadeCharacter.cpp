@@ -18,6 +18,7 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/PlayerStart.h"
 #include "Spawner.h"
+#include "Particles/ParticleSystem.h"
 
 //////////////////////////////////////////////////////////////////////////
 // AProjectArcadeCharacter
@@ -58,6 +59,7 @@ AProjectArcadeCharacter::AProjectArcadeCharacter()
   hitBox->SetCollisionResponseToChannel(ECC_GameTraceChannel2, ECR_Overlap);
   hitBox->SetCollisionResponseToChannel(ECC_GameTraceChannel3, ECR_Overlap);
   hitBox->SetCollisionResponseToChannel(ECC_GameTraceChannel4, ECR_Overlap);
+  hitBox->SetCollisionResponseToChannel(ECC_GameTraceChannel10, ECR_Overlap);
   hitBox->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Block);
   hitBox->OnComponentBeginOverlap.AddDynamic(this, &AProjectArcadeCharacter::OnOverlapBegin);
   hitBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -140,7 +142,6 @@ AProjectArcadeCharacter::AProjectArcadeCharacter()
 void AProjectArcadeCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
 {
   check(PlayerInputComponent);
-  //UE_LOG(LogTemp, Warning, TEXT("SETUPPLAYERINPUT CALLED"));
 
   APlayerController* pc = Cast<APlayerController>(GetController());
   UWorld* world = GetWorld();
@@ -149,9 +150,6 @@ void AProjectArcadeCharacter::SetupPlayerInputComponent(class UInputComponent* P
   if (pc && world)
   {
     ULocalPlayer* localPlayer = pc->GetLocalPlayer();
-
-    //MaybeTrun on??
-    //localPlayer->GetPlayerController(world)->bAutoManageActiveCameraTarget = false;
 
     if (localPlayer)
     {
@@ -215,6 +213,7 @@ void AProjectArcadeCharacter::SetupPlayerInputComponent(class UInputComponent* P
         UE_LOG(LogTemp, Warning, TEXT("Distance is %s"), *FString::SanitizeFloat(distance));
         continue;
       }
+      isPlayerOne = true;
 
       position = playerStarts[i]->GetActorLocation();
       rotator = playerStarts[i]->GetActorRotation();
@@ -224,19 +223,28 @@ void AProjectArcadeCharacter::SetupPlayerInputComponent(class UInputComponent* P
         playerID = -1;
         player2->playerID = 2;
         player2->SpawnDefaultController();
+        isPlayerOne = false;
+        player2->isPlayerOne = false;
+
         UE_LOG(LogTemp, Warning, TEXT("Spawned player with name: %s"), *player2->GetFName().ToString());
       }
     }
+    isPlayerOne = true;
   }
 }
 
 void AProjectArcadeCharacter::BeginPlay()
 {
   Super::BeginPlay();
+
+  GetCapsuleComponent()->OnComponentEndOverlap.AddDynamic(this, &AProjectArcadeCharacter::OnOverlapEnd);
   cHealth->Reset();
   cHealth->OnHealthChanged.AddDynamic(this, &AProjectArcadeCharacter::OnHealthChanged);
   staticMeshShield->SetVisibility(false);
   staticMeshShield->SetSimulatePhysics(false);
+
+
+  cameraOriginalPos = FollowCamera->GetRelativeTransform();
 }
 
 ASpawner* AProjectArcadeCharacter::GetSpwaner()
@@ -303,6 +311,7 @@ void AProjectArcadeCharacter::DoAttack()
 {
   if (canBasicAttack)
   {
+    BasicAttackAudio(this);
     SwapAttackBool();
     hitBox->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
     GetWorldTimerManager().SetTimer(TimerHandle_AttackTimer, this, &AProjectArcadeCharacter::SwapAttackBool, basicAttackCooldown, false, basicAttackCooldown);
@@ -323,6 +332,7 @@ void AProjectArcadeCharacter::DoAttack_P2()
 {
   if (player2->canBasicAttack)
   {
+    player2->BasicAttackAudio(player2);
     player2->SwapAttackBool();
     player2->hitBox->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
     player2->GetWorldTimerManager().SetTimer(player2->TimerHandle_AttackTimer, this, &AProjectArcadeCharacter::SwapAttackBool_P2, player2->basicAttackCooldown, false, player2->basicAttackCooldown);
@@ -349,6 +359,7 @@ void AProjectArcadeCharacter::DoShield()
   //ACTIVATE SHIELD
   if (canShield)
   {
+    ShieldAttackAudio(this);
     canShield = false;
     staticMeshShield->SetVisibility(true);
     shieldBox->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -374,16 +385,13 @@ void AProjectArcadeCharacter::AssignShiledToFunction()
 void AProjectArcadeCharacter::Kill()
 {
   dead = true;
+  Death(this);
   SetActorTickEnabled(false);
   SetActorEnableCollision(false);
   GetCharacterMovement()->GravityScale = 0;
   StopJumping();
   GetCharacterMovement()->StopMovementImmediately();
   GetCharacterMovement()->Deactivate();
-
-  //Destroys character
-  GetOwner()->SetLifeSpan(3.0f);
-  Destroy();
 }
 
 bool AProjectArcadeCharacter::IsDead()
@@ -423,6 +431,9 @@ void AProjectArcadeCharacter::DoTwistAttack()
   {
     UE_LOG(LogTemp, Warning, TEXT("TWISTIN'!"));
 
+    player2->OnTwistAttackParticle(player2);
+    player2->TwistAttackAudio(player2);
+
     player2->canTwistAttack = false;
     player2->tailHitBox->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     player2->GetWorldTimerManager().SetTimer(player2->TimerHandle_TwistAttackTimer, this, &AProjectArcadeCharacter::SwapTwistAttackdBool, player2->twistAttackCooldown + player2->twistAttackCooldown, false, player2->twistAttackCooldown + player2->twistAttackCooldown);
@@ -458,7 +469,8 @@ void AProjectArcadeCharacter::DoSmashAttack()
   if (canSmashAttack)
   {
     UE_LOG(LogTemp, Warning, TEXT("SMASHIN'!"));
-
+    SmashAttackAudio(this);
+    OnSmashAttackParticle(this);
     canSmashAttack = false;
     smashHitBox->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     GetWorldTimerManager().SetTimer(TimerHandle_SmashAttackTimer, this, &AProjectArcadeCharacter::SwapSmashAttackdBool, SmashAttackCooldown + SmashAttackCooldown, false, SmashAttackCooldown + SmashAttackCooldown);
@@ -492,6 +504,8 @@ void AProjectArcadeCharacter::DoDash()
 {
   if (player2->canDash)
   {
+    player2->DashAttackAudio(player2);
+    player2->OnDashParticle(player2);
     player2->canDash = false;
     player2->GetWorldTimerManager().SetTimer(player2->TimerHandle_DashTimer, this, &AProjectArcadeCharacter::SwapDashBool, player2->DashCooldown, false, player2->DashCooldown);
     player2->LaunchCharacter(player2->GetActorForwardVector() * player2->dashAmount, false, false);
@@ -559,6 +573,7 @@ void AProjectArcadeCharacter::BossAttack()
   {
     UE_LOG(LogTemp, Warning, TEXT("SMASHIN'!"));
 
+    BossSmashAttackAudio(this);
     bossCanBasicAttack = false;
     bossSmashHitBox->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     GetWorldTimerManager().SetTimer(TimerHandle_BossAttackTimer, this, &AProjectArcadeCharacter::BossSwapAttackBool, bossBasicAttackCooldown + bossBasicAttackCooldown, false, bossBasicAttackCooldown + bossBasicAttackCooldown);
@@ -584,7 +599,7 @@ void AProjectArcadeCharacter::BossSecondAttack()
   if (bossSecondCanBasicAttack)
   {
     UE_LOG(LogTemp, Warning, TEXT("BOSS 2nD ATTACK'!"));
-
+    BossTwistAttackAudio(this);
     bossSecondCanBasicAttack = false;
     bossTailHitBox->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     GetWorldTimerManager().SetTimer(TimerHandle_BossSecondAttackTimer, this, &AProjectArcadeCharacter::BossSecondSwapAttackBool, bossSecondBasicAttackCooldown + bossSecondBasicAttackCooldown, false, bossSecondBasicAttackCooldown + bossSecondBasicAttackCooldown);
@@ -606,11 +621,18 @@ void AProjectArcadeCharacter::BossSecondSwapAttackBool()
 
 void AProjectArcadeCharacter::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
+
+  if (OtherActor && (OtherActor != this) && OtherComp && OtherComp->GetCollisionObjectType() == ECollisionChannel::ECC_GameTraceChannel11)
+    FollowCamera->SetRelativeTransform(cameraOriginalPos + offsetCamera);
+
   if (OverlappedComp == hitBox)
-    if (OtherActor && (OtherActor != this) && OtherComp)
+    if (OtherActor && (OtherActor != this) && OtherComp && OtherComp->GetCollisionObjectType() != ECollisionChannel::ECC_GameTraceChannel10)
     {
       FDamageEvent dmgEvt = FDamageEvent(*damageType);
       OtherActor->TakeDamage(NormalAttackDamage, dmgEvt, GetInstigatorController(), this);
+      AProjectArcadeCharacter* soundActor = Cast<AProjectArcadeCharacter>(OtherActor);
+      if (soundActor != nullptr)
+        soundActor->GettingHitAudio(soundActor);
     }
 
   if (OverlappedComp == tailHitBox)
@@ -620,6 +642,9 @@ void AProjectArcadeCharacter::OnOverlapBegin(UPrimitiveComponent* OverlappedComp
     {
       FDamageEvent dmgEvt = FDamageEvent(*damageType);
       OtherActor->TakeDamage(TwistAttackDamage, dmgEvt, GetInstigatorController(), this);
+      AProjectArcadeCharacter* soundActor = Cast<AProjectArcadeCharacter>(OtherActor);
+      if (soundActor != nullptr)
+      soundActor->GettingHitAudio(soundActor);
     }
 
   if (OverlappedComp == smashHitBox)
@@ -629,20 +654,18 @@ void AProjectArcadeCharacter::OnOverlapBegin(UPrimitiveComponent* OverlappedComp
     {
       FDamageEvent dmgEvt = FDamageEvent(*damageType);
       OtherActor->TakeDamage(SmashAttackDamage, dmgEvt, GetInstigatorController(), this);
+      AProjectArcadeCharacter* soundActor = Cast<AProjectArcadeCharacter>(OtherActor);
+      if (soundActor != nullptr)
+      soundActor->GettingHitAudio(soundActor);
     }
 
   if (OtherActor && (OtherActor != this) && OtherComp &&
     GetCapsuleComponent()->GetCollisionObjectType() == ECollisionChannel::ECC_GameTraceChannel4 &&
     OtherComp->GetCollisionObjectType() == ECollisionChannel::ECC_GameTraceChannel5)
   {
-    UE_LOG(LogTemp, Warning, TEXT("AI Collided with SPAWNER"));
-
     ASpawner* tempSpawner = Cast<ASpawner>(OtherActor);
     if (tempSpawner != nullptr && spawner == nullptr)
-    {
-      UE_LOG(LogTemp, Warning, TEXT("Assinged SPAWNER"));
       spawner = tempSpawner;
-    }
   }
 
   if (OverlappedComp == bossTailHitBox)
@@ -650,7 +673,9 @@ void AProjectArcadeCharacter::OnOverlapBegin(UPrimitiveComponent* OverlappedComp
     {
       FDamageEvent dmgEvt = FDamageEvent(*damageType);
       OtherActor->TakeDamage(BossTwistAttackDamage, dmgEvt, GetInstigatorController(), this);
-
+      AProjectArcadeCharacter* soundActor = Cast<AProjectArcadeCharacter>(OtherActor);
+      if (soundActor != nullptr)
+      soundActor->GettingHitAudio(soundActor);
     }
 
   if (OverlappedComp == bossSmashHitBox)
@@ -658,10 +683,24 @@ void AProjectArcadeCharacter::OnOverlapBegin(UPrimitiveComponent* OverlappedComp
     {
       FDamageEvent dmgEvt = FDamageEvent(*damageType);
       OtherActor->TakeDamage(BossSmashAttackDamage, dmgEvt, GetInstigatorController(), this);
+      AProjectArcadeCharacter* soundActor = Cast<AProjectArcadeCharacter>(OtherActor);
+      if (soundActor != nullptr)
+      soundActor->GettingHitAudio(soundActor);
     }
 
+  if (OtherActor && (OtherActor != this) && OtherComp &&
+    OtherComp->GetCollisionObjectType() == ECollisionChannel::ECC_GameTraceChannel9)
+    ActivateSnow(this);
 }
 
 void AProjectArcadeCharacter::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
 {
+  if (OtherActor && (OtherActor != this) && OtherComp &&
+    OtherComp->GetCollisionObjectType() == ECollisionChannel::ECC_GameTraceChannel9)
+    DeActivateSnow(this);
+
+  if (OtherActor && (OtherActor != this) && OtherComp &&
+    OtherComp->GetCollisionObjectType() == ECollisionChannel::ECC_GameTraceChannel11)
+    FollowCamera->SetRelativeTransform(cameraOriginalPos);
+
 }

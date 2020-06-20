@@ -31,8 +31,6 @@ protected:
   UFUNCTION()
   void OnTickPowerup();
 
-  UPROPERTY(BlueprintReadOnly)
-    int32 playerNum;
 public:
   void ActivatePowerup(AActor* player);
 

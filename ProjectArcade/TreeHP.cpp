@@ -23,6 +23,10 @@ ATreeHP::ATreeHP()
   overlapColldier->OnComponentBeginOverlap.AddDynamic(this, &ATreeHP::OnOverlapBegin);
   overlapColldier->SetupAttachment(RootComponent);
 
+  spawnColldier = CreateDefaultSubobject<UCapsuleComponent>(TEXT("Spawn Collider"));
+  spawnColldier->SetCapsuleSize(25, 12);
+  spawnColldier->SetCollisionResponseToAllChannels(ECR_Ignore);
+
 }
 
 // Called when the game starts or when spawned
@@ -35,16 +39,18 @@ void ATreeHP::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherA
 {
   if (howMany > 0)
     if (OtherActor && (OtherActor != this) && OtherComp &&
-        OtherComp->GetCollisionObjectType() == ECollisionChannel::ECC_GameTraceChannel6)
+      OtherComp->GetCollisionObjectType() == ECollisionChannel::ECC_GameTraceChannel6)
     {
       if (powerupClass == nullptr)
       {
         UE_LOG(LogTemp, Warning, TEXT("PowerupClass is nullptr in %s. CHECK THE BLUEPRINT"), *GetName());
         return;
       }
-
+      FTransform trans;
+      trans = spawnColldier->GetComponentTransform();
       FActorSpawnParameters spawnParams;
-      GetWorld()->SpawnActor<APickupActor>(powerupClass, GetTransform(), spawnParams);
+      spawnParams.Owner = this;
+      GetWorld()->SpawnActor<APickupActor>(powerupClass, trans, spawnParams);
       howMany--;
     }
 }

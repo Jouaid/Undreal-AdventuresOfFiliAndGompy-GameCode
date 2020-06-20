@@ -27,28 +27,43 @@ public:
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Players")
     AProjectArcadeCharacter* playerTwo;
 
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Offset")
+    int32 xOffSet;
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Offset")
+    int32 yOffSet;
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Offset")
+    int32 zOffSet;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Distance")
+    int32 distCheckNumber;
+
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+  float floatDist;
+
+  bool splitCamera;
+
   APlayerController* myCamera;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
     AActor* actorToMoveTo;
 
   FVector dist;
+
+  UFUNCTION(BlueprintImplementableEvent)
+    void SplitCamera(AActor* findMeInBlueprint);
+  UFUNCTION(BlueprintImplementableEvent)
+    void JoinCamera(AActor* findMeInBlueprint);
 protected:
   // Called when the game starts or when spawned
   virtual void BeginPlay() override;
 
   void MoveCamera();
 
-  UInputComponent* myPlayerInputComponent;
 
 public:
   // Called every frame
   virtual void Tick(float DeltaTime) override;
-
-  // Called to bind functionality to input
-  virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-  AProjectArcadeCharacter* GetPlayerOne();
-  AProjectArcadeCharacter* GetPlayerTwo();
 
   UFUNCTION(BlueprintCallable)
     void SetPlayers(AProjectArcadeCharacter* getPlayerOne, AProjectArcadeCharacter* getPlayerTwo);
